@@ -14,8 +14,8 @@ local M = {}
 
 -- ── Tunables ──────────────────────────────────────────────────────────────────
 local NORMAL_W, NORMAL_H = 1063, 403     -- normal.png (a gate floor; doors 11-20)
-local FLOOR_W,  FLOOR_H  = 1198, 517     -- floor.png (the base)
-local ROOF_W,   ROOF_H   =  996, 403     -- roof.png (roof 1 = level 21; now a 403-tall floor)
+local FLOOR_W            = 1198          -- floor_top/bottom width (the base, split from floor.png)
+local ROOF_W,   ROOF_H   =  996, 403     -- roof.png (door 10 = level 20)
 
 -- element offsets from the selected floor's normal.PNG top-left  {dx, dy, w, h}
 local OFF_DETAILS  = { -736,  -67, 729, 499 }
@@ -27,8 +27,11 @@ local OFF_CARET_DN = { -535,  433, 305, 209 }
 
 local SCROLL_SPEED   = 9.0     -- exp-smoothing rate for the tower scroll (bigger = snappier)
 local DIGIT_ADVANCE  = 170     -- horizontal step between digits when centering multi-digit numbers
-local LAND_FACTOR    = 0.55    -- landbg vertical parallax vs the tower scroll
-local SKY_PITCH_RATE = 0.0022  -- degrees of camera pitch per scrolled pixel (weak = far sky)
+-- world-Y of the pagoda base bottom = floor.png full height (floor_top[0,403] + floor_bottom
+-- content[403,517]). The landbg bottom pins here (moving 1:1 with the tower), so when the base
+-- is centred (~level 10-11) the landbg sits exactly at its title-screen position, no cutoff.
+local BASE_BOTTOM_WY = 517
+local SKY_PITCH_RATE = 0.0006  -- degrees of camera pitch per scrolled pixel (weak = far sky)
 local BASE_PITCH     = -6      -- matches Script.lua's world pitch
 local CARET_BOB_AMP  = 14
 local CARET_BOB_SPD  = 3.2
@@ -123,10 +126,9 @@ local function band(level)
 end
 
 -- world-space vertical CENTER of a level's floor image (y increases downward; higher
--- level = higher up = more negative). Base spans world [0, FLOOR_H].
+-- level = higher up = more negative). Every level is a uniform NORMAL_H-tall slot.
 local function floor_center(level)
-    if level <= 10 then return FLOOR_H * 0.5 end
-    -- doors (11-20), roof 1 (21) and empty roofs above all stack in uniform 403 steps
+    -- every level (training, doors, roofs) stacks in uniform NORMAL_H steps
     return -NORMAL_H * (level - 10) + NORMAL_H * 0.5
 end
 
@@ -151,11 +153,7 @@ end
 -- the world-Y the camera settles at so the selected item sits at the focus (or, for the
 -- base band, is pinned to the bottom so its details lean low instead of centering).
 local function cam_target(item)
-    local L = item_level(item)
-    if L <= 10 then
-        return FLOOR_H - THEME:GetResolution().Y        -- base bottom pinned to screen bottom
-    end
-    return floor_center(L) - focus_y()
+    return floor_center(item_level(item)) - focus_y()   -- every level centres uniformly (no base pin)
 end
 
 -- the within-tier number shown big:  training 1-10, gates 1-10 (door n), roofs 1-n
@@ -334,7 +332,7 @@ function M.update(dt, nav)
         local L = selected_level()
         local hour = (L ~= nil and L >= 21) and M.roofSkyHour(L) or 12.0
         if hour ~= _last_hour then _world.daynight:setHour(hour) ; _last_hour = hour end
-        local cam_base = FLOOR_H - THEME:GetResolution().Y
+        local cam_base = BASE_BOTTOM_WY - THEME:GetResolution().Y   -- rest pitch when the base is centred
         _world.cam:setPitch(BASE_PITCH + (cam_base - _cam) * SKY_PITCH_RATE)
     end
     return result
@@ -361,14 +359,12 @@ end
 
 -- the selected floor's normal.PNG reference top-left (screen space). X is always the
 -- normal-width right alignment so the details panel stays on-screen; Y follows the band.
-local function ref_topleft(item)
+-- The selected item always scrolls to the centre, so its normal-ref top-left is FIXED at
+-- screen-centre. Drawing the frame / details / number against this (instead of the animating
+-- world position) keeps them still and readable while the tower floors slide behind.
+local function ref_topleft()
     local res = THEME:GetResolution()
-    local rx = res.X - NORMAL_W
-    local L = item_level(item)                          -- Exit shares the lowest level's spot
-    if L <= 10 then
-        return rx, screen_y(0)                          -- base top (pinned low → leans bottom)
-    end
-    return rx, screen_y(-NORMAL_H * (L - 10))            -- doors, roof 1 and above: uniform 403 steps
+    return res.X - NORMAL_W, res.Y * 0.5 - NORMAL_H * 0.5
 end
 
 -- big number tint = the level's dan-plate colour; roofs stay white
@@ -645,19 +641,24 @@ end
 -- ── Draw ──────────────────────────────────────────────────────────────────────
 function M.draw()
     local res   = THEME:GetResolution()
-    local res_w, res_h = res.X, res.Y
+    local res_w = res.X
 
     -- landbg parallax (skybox itself is drawn by Script.lua behind us)
     if _tex.landbg ~= nil and _tex.landbg.Loaded then
-        local cam_base = FLOOR_H - res_h
-        local dy = (cam_base - _cam) * LAND_FACTOR
-        _tex.landbg:DrawAtAnchor(res_w, res_h + dy, "bottomright")
+        -- bottom pinned to the pagoda base bottom; matches the title-screen landbg when the
+        -- base is centred (~level 10-11), and scrolls 1:1 with the tower elsewhere
+        _tex.landbg:DrawAtAnchor(res_w, screen_y(BASE_BOTTOM_WY), "bottomright")
     end
 
     -- tower: base + gate floors (11-19) + roof (20). Roofs (21+) have no image.
     -- Undiscovered floors (level > highest reached) are darkened, then buried under a
     -- dark cloud bank + shadow particles so their art can't be read.
-    draw_floor_img(_tex.floor,  FLOOR_W,  FLOOR_H,  0, false)
+    -- base: level 10 building (floor_top, worldY [0,403]) and level 9 (floor_bottom, the
+    -- removed bottom slice transparent-padded to a full 403 slot, worldY [403,806]). Levels
+    -- 1-8 have no floor image. Training isn't corrupted, so no darken flag.
+    local bx = THEME:GetResolution().X - FLOOR_W
+    if _tex.floor_top    ~= nil and _tex.floor_top.Loaded    then _tex.floor_top:Draw(bx, screen_y(0)) end
+    if _tex.floor_bottom ~= nil and _tex.floor_bottom.Loaded then _tex.floor_bottom:Draw(bx, screen_y(NORMAL_H)) end
     for L = 11, 19 do
         -- door 5 (level 15) becomes the checkpoint-cleared floor once beaten
         local ftex = _tex.normal
@@ -675,9 +676,9 @@ function M.draw()
     local pdt = fps.deltaTime
     update_particles(pdt) ; emit_particles(pdt) ; draw_particles()
 
-    -- selection UI for the current item
+    -- selection UI for the current item (drawn at a fixed screen-centre so it stays readable)
     local item = _items[_sel]
-    local rx, ry = ref_topleft(item)
+    local rx, ry = ref_topleft()
 
     if item.kind == "exit" then
         -- a details plaque with only the word Exit, centred
@@ -688,10 +689,11 @@ function M.draw()
         if t ~= nil then t:DrawAtAnchor(cx, cy, "center") end
     else
         local L = item.level
-        local b = band(L)
-        -- frame only for the door band (levels 11-20); never for training or roofs
-        if b == "gate" then
-            draw_tex(_tex.frame, rx + OFF_FRAME[1], ry + OFF_FRAME[2])
+        -- frame on EVERY floor (only the Exit entry has none), with a pulsing "bounce" opacity
+        if _tex.frame ~= nil and _tex.frame.Loaded then
+            _tex.frame:SetOpacity(0.75 + 0.25 * math.sin(_bob_t * 3.2))
+            _tex.frame:Draw(rx + OFF_FRAME[1], ry + OFF_FRAME[2])
+            _tex.frame:SetOpacity(1)
         end
         draw_tex(_tex.details, rx + OFF_DETAILS[1], ry + OFF_DETAILS[2])
         draw_tex(gate_tex(L), rx + OFF_GATE[1], ry + OFF_GATE[2])

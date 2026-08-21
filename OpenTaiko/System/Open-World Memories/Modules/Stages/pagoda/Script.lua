@@ -144,7 +144,9 @@ local function ensure_resources()
     if tex == nil then
         tex = {
             landbg = TEXTURE:CreateTexture(TXT .. "landbg.png"),
-            floor  = TEXTURE:CreateTexture(TXT .. "floor.png"),
+            floor  = TEXTURE:CreateTexture(TXT .. "floor.png"),          -- title-screen tower base
+            floor_top    = TEXTURE:CreateTexture(TXT .. "floor_top.png"),    -- selector: level 10 (building)
+            floor_bottom = TEXTURE:CreateTexture(TXT .. "floor_bottom.png"), -- selector: level 9 (transparent-padded)
             normal = TEXTURE:CreateTexture(TXT .. "normal.png"),
             roof   = TEXTURE:CreateTexture(TXT .. "roof.png"),
             checkpoint_cleared = TEXTURE:CreateTexture(TXT .. "checkpoint_cleared.png"),
