@@ -323,6 +323,10 @@ local function _set_highest_level(level)
     end
 end
 
+-- exposed for Script.lua: the title screen draws the selector's tower scene, which needs the
+-- highest reached level to darken the undiscovered doors identically to the floor selector
+function M.highest_level() return _highest_level() end
+
 -- One-time migration for the 題/扉/穹天 restructure: the kyuu range grew from 5 to 10 levels and the
 -- 扉/穹天 tiers shifted +5, so a saved highest_level from before this update must be renumbered or the
 -- player would lose progress / start-point unlocks. Old level → new level:
@@ -929,7 +933,7 @@ function M.draw()
         _font_hint:GetText("Press any button to go back", false, 600, C_DIM):DrawAtAnchor(cx, base_y + 130, "center")
 
     -- ── TITLE SCREEN (main menu) ────────────────────────────────────────────────
-    -- The stage draws the day-sky + landbg/floor/normal layers behind this; here we
+    -- The stage draws the day-sky + the selector's tower scene behind this; here we
     -- lay the heading over the upper half, the best rank just below it, and the
     -- Challenge / Practice / Exit options across the lower half.
     elseif _pagoda_state == "main_menu" then

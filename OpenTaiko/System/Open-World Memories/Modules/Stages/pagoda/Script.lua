@@ -4,7 +4,8 @@
 --
 -- Reached from dan_select via the `dan_doors` transition (doors close over the dojo,
 -- open onto this title screen) and returns the same way. The title screen layers,
--- bottom-to-top: animated day skybox (Lua3DScene) → landbg → floor → normal ×2 →
+-- bottom-to-top: animated day skybox (Lua3DScene) → the selector's tower scene resting at
+-- the base floor (selector.drawTitle — identical to hovering level 10 in the selector) →
 -- the pagoda UI (title / best rank / Challenge·Practice·Exit menu), drawn by pagoda.lua.
 -- Owns a looping Title BGM that fades in as the doors open and out as they close.
 -- All menu / challenge / practice logic lives in pagoda.lua; this file is the shell.
@@ -31,12 +32,6 @@ local BGM_FADE_SEC = 0.7   -- match dan_doors FADE_OUT_SECONDS / FADE_IN_SECONDS
 -- which advances 1:1 with real time by default (feels static). Scale it up for livelier
 -- clouds without touching the fixed noon time-of-day.
 local SKY_SPEED = 5
-
--- Pagoda tower: vertical nudge where each floor meets the one below. 0 = each floor
--- sits exactly on top of the previous (its bottom edge on the previous top edge) —
--- "just over". Positive overlaps the pieces, negative leaves a gap. The art fills
--- its bounding box, so 0 butts them cleanly.
-local STACK_OVERLAP = 0
 
 -- ── State ────────────────────────────────────────────────────────────────────
 
@@ -143,13 +138,31 @@ end
 local function ensure_resources()
     if tex == nil then
         tex = {
-            landbg = TEXTURE:CreateTexture(TXT .. "landbg.png"),
-            floor  = TEXTURE:CreateTexture(TXT .. "floor.png"),          -- title-screen tower base
-            floor_top    = TEXTURE:CreateTexture(TXT .. "floor_top.png"),    -- selector: level 10 (building)
-            floor_bottom = TEXTURE:CreateTexture(TXT .. "floor_bottom.png"), -- selector: level 9 (transparent-padded)
+            -- (landbg.png / floor.png are no longer loaded: the title reuses the selector's
+            --  scene, and floor.png only serves as the offline crop source for floor_top +
+            --  the top of road_stairs_base)
+            floor_top = TEXTURE:CreateTexture(TXT .. "floor_top.png"),   -- level 10 (pagoda base, rows 0-436)
             normal = TEXTURE:CreateTexture(TXT .. "normal.png"),
             roof   = TEXTURE:CreateTexture(TXT .. "roof.png"),
+            roof_beanstalk = TEXTURE:CreateTexture(TXT .. "roof_beanstalk.png"), -- roof 1 variant once door 10 beaten
+            beanstalk = TEXTURE:CreateTexture(TXT .. "beanstalk.png"),    -- roof 2+ continuity (single repeatable tile)
             checkpoint_cleared = TEXTURE:CreateTexture(TXT .. "checkpoint_cleared.png"),
+            -- foreground road column (right-aligned, path @ x=812): repeatable forest/stairs tiles +
+            -- the L5/L9 transition tiles. The niōmon gate + lanterns are overlay objects; the dojo
+            -- is the full-width top-view tile in the slot BELOW level 1 (the departure point).
+            road_forest        = TEXTURE:CreateTexture(TXT .. "road_forest.png"),        -- levels 1-4
+            road_stairs        = TEXTURE:CreateTexture(TXT .. "road_stairs.png"),        -- levels 6-8
+            road_forest_stairs = TEXTURE:CreateTexture(TXT .. "road_forest_stairs.png"), -- level 5
+            road_stairs_base   = TEXTURE:CreateTexture(TXT .. "road_stairs_base.png"),   -- level 9
+            dojo    = TEXTURE:CreateTexture(TXT .. "dojo.png"),   -- slot 0: dojo from above
+            niomon  = TEXTURE:CreateTexture(TXT .. "gate.png"),   -- guardian gate (L5)
+            lantern = TEXTURE:CreateTexture(TXT .. "lantern.png"),
+            -- parallax background (separate images): forest fill + treeline fringe + 3 mountain layers
+            bg_far1     = TEXTURE:CreateTexture(TXT .. "bg/far1.png"),     -- distant snow peaks (slowest)
+            bg_far2     = TEXTURE:CreateTexture(TXT .. "bg/far2.png"),     -- mid ridge
+            bg_far3     = TEXTURE:CreateTexture(TXT .. "bg/far3.png"),     -- near ridge + foothills + skirt
+            bg_near     = TEXTURE:CreateTexture(TXT .. "bg/near.png"),     -- 2D-tiled forest canopy
+            bg_near_top = TEXTURE:CreateTexture(TXT .. "bg/near_top.png"), -- organic treeline cap
             caret    = TEXTURE:CreateTexture(SEL .. "caret.png"),
             caret_up = TEXTURE:CreateTexture(SEL .. "caret_up.png"),
             gate     = TEXTURE:CreateTexture(SEL .. "gate.png"),
@@ -281,10 +294,6 @@ end
 -- ── Draw ─────────────────────────────────────────────────────────────────────
 
 function draw()
-    local res   = THEME:GetResolution()
-    local res_w = res.X
-    local res_h = res.Y
-
     -- Layer 0 — animated day skybox (pcall-guarded, see update()).
     if world ~= nil and not world_failed then
         local ok = pcall(world.render, world)
@@ -292,25 +301,12 @@ function draw()
         if not ok then world_failed = true end
     end
 
-    -- Title background — only when the floor selector isn't up (it draws its own
-    -- scrolling landbg + tower, via pagoda.draw() → selector.draw()).
+    -- Title background — only when the floor selector isn't up (selector.draw() renders the
+    -- same scene itself then). This is the selector's landscape + tower resting at the base
+    -- floor (level 10) — identical to hovering it — and since the camera EASES to that pose,
+    -- backing out of Challenge/Practice scrolls smoothly home instead of snapping.
     if tex ~= nil and not selector.active then
-        -- Layer 1 — landbg (full-frame backdrop, pinned bottom-right).
-        if tex.landbg ~= nil and tex.landbg.Loaded then
-            tex.landbg:DrawAtAnchor(res_w, res_h, "bottomright")
-        end
-
-        -- Layers 2-4 — the pagoda tower: floor base at the bottom-right, then two
-        -- normal tiers stacked UP the screen, each resting on the roof of the piece
-        -- below it (nested by STACK_OVERLAP), so they read as one continuous tower.
-        if tex.floor ~= nil and tex.floor.Loaded and tex.normal ~= nil and tex.normal.Loaded then
-            local y = res_h
-            tex.floor:DrawAtAnchor(res_w, y, "bottomright")
-            y = y - tex.floor.Height + STACK_OVERLAP
-            tex.normal:DrawAtAnchor(res_w, y, "bottomright")
-            y = y - tex.normal.Height + STACK_OVERLAP
-            tex.normal:DrawAtAnchor(res_w, y, "bottomright")
-        end
+        selector.drawTitle(pagoda.highest_level())
     end
 
     -- BGM fade-out while the doors close (update() is frozen once Exit() was called).
