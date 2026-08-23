@@ -11,6 +11,10 @@
         "PAGODA_ACCEPT":     "¿Aceptar el desafío?",
         "PAGODA_YES":        "Sí",
         "PAGODA_NO":         "No",
+        "PAGODA_NEXT":          "Siguiente…",
+        "PAGODA_START":         "Comenzar",
+        "PAGODA_LEAVE":         "Salir",
+        "PAGODA_LEAVE_CONFIRM":  "¿Seguro? Perderás tu progreso si sales",
         "PAGODA_EXIT":      "Salir",
 
         "SETTINGS_UI_KEYS": "Entrada",

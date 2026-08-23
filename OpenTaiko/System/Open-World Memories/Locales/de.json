@@ -11,6 +11,10 @@
         "PAGODA_ACCEPT":     "Herausforderung annehmen?",
         "PAGODA_YES":        "Ja",
         "PAGODA_NO":         "Nein",
+        "PAGODA_NEXT":          "Weiter…",
+        "PAGODA_START":         "Start",
+        "PAGODA_LEAVE":         "Verlassen",
+        "PAGODA_LEAVE_CONFIRM":  "Bist du sicher? Dein Fortschritt geht verloren, wenn du gehst",
         "PAGODA_EXIT":      "Beenden",
 
         "SETTINGS_UI_KEYS": "Eingabe",

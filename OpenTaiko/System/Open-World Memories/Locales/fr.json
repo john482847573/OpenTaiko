@@ -11,6 +11,10 @@
         "PAGODA_ACCEPT":     "Relever le défi ?",
         "PAGODA_YES":        "Oui",
         "PAGODA_NO":         "Non",
+        "PAGODA_NEXT":          "Suivant…",
+        "PAGODA_START":         "Commencer",
+        "PAGODA_LEAVE":         "Partir",
+        "PAGODA_LEAVE_CONFIRM":  "Es-tu sûr ? Ta progression sera perdue si tu pars",
         "PAGODA_EXIT":      "Quitter",
 
         "SETTINGS_UI_KEYS": "Entrées",

@@ -13,6 +13,10 @@
         "PAGODA_ACCEPT":     "Accept the Challenge?",
         "PAGODA_YES":        "Yes",
         "PAGODA_NO":         "No",
+        "PAGODA_NEXT":          "Next...",
+        "PAGODA_START":         "Start",
+        "PAGODA_LEAVE":         "Leave",
+        "PAGODA_LEAVE_CONFIRM":  "Are you sure? Your progress will be lost if you leave",
         "PAGODA_EXIT":      "Exit",
 
         "SETTINGS_UI_KEYS": "Input",

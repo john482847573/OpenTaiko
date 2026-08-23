@@ -22,7 +22,8 @@
 --   drawBox=false,                  -- skip the box/name chrome
 --   advanceInput=fn,                -- extra advance predicate (e.g. the drum Decide pad)
 --   cps=28,                         -- typewriter speed each node starts at (default 42; {speed:} overrides)
---   onSfx=fn, onVoice=fn, onExpr=fn, portraits={name=LuaTexture} }
+--   onSfx=fn, onVoice=fn, onExpr=fn, portraits={name=LuaTexture},
+--   onBlip=fn, blipEvery=3 }         -- VN typing blip: onBlip() every blipEvery revealed glyphs
 
 local NavInput = require("NavInput")
 local Util     = require("Util")
@@ -87,7 +88,9 @@ function Dialogue.new(opts)
     self.gfontName = opts.gfontName or opts.gfont
     self.ui = opts.ui or "popui"   -- the rounded PopUI-style chrome is the default skin-wide look
                                    -- (pass ui="plain" for the old flat panel)
-    self.theme = Util.merge(THEME_DEFAULT, opts.theme)
+    -- `or {}`: Util.merge returns its second argument when it is not a table, so a caller that
+    -- omits `theme` would otherwise get a nil theme and fault on the first box draw
+    self.theme = Util.merge(THEME_DEFAULT, opts.theme or {})
     self.sfx = Sfx.resolve(opts.sfx, nokon_dialogue)
     local box = opts.box or {}
     self.boxX = box.x or DEF_BOX_X
@@ -105,6 +108,11 @@ function Dialogue.new(opts)
     self.onSfx = opts.onSfx
     self.onVoice = opts.onVoice
     self.onExpr = opts.onExpr
+    self.onBlip = opts.onBlip             -- called every blipEvery revealed glyphs (VN typing blip)
+    self.blipEvery = opts.blipEvery or 3
+    self.choiceY = opts.choiceY           -- plain/boxless choice list top (default: below the text)
+    self.onShake = opts.onShake           -- fn(amp,dur); 2D callers shake themselves
+    self._blipAt = 0
     self.portraits = opts.portraits or {}
     self._atlas = setmetatable({}, { __mode = "k" })
     self._colors = {}
@@ -196,7 +204,33 @@ function Dialogue:layoutGlyph(text)
     end
     local total = 0
     for _, l in ipairs(lines) do total = total + l.n end
-    return lines, cmds, total
+    -- Realign the command keys from RAW char positions to DRAWN glyph positions: the engine
+    -- wrap drops spaces at line breaks, so without this every dropped space pushes all later
+    -- {pause:}/{sfx:} tags one glyph late (they fired after the next characters had shown).
+    local raw = {}
+    for _, seq in ipairs(plain) do
+        if seq ~= "\n" then raw[#raw + 1] = seq end
+    end
+    local map, di = {}, 1
+    local drawn = {}
+    for _, l in ipairs(lines) do
+        for _, ch in ipairs(l.chars) do drawn[#drawn + 1] = ch end
+    end
+    for ri = 1, #raw do
+        if di <= #drawn and drawn[di] == raw[ri] then
+            map[ri] = di
+            di = di + 1
+        else
+            map[ri] = math.max(0, di - 1)   -- char dropped by wrapping: fire with the previous glyph
+        end
+    end
+    local remapped = {}
+    for k, list in pairs(cmds) do
+        local nk = (k <= 0) and 0 or (map[k] or total)
+        remapped[nk] = remapped[nk] or {}
+        for _, c in ipairs(list) do table.insert(remapped[nk], c) end
+    end
+    return lines, remapped, total
 end
 
 function Dialogue:start(script)
@@ -219,9 +253,14 @@ function Dialogue:nextNode()
         self.total = #self.glyphs
     end
     self.revealed = 0
+    self._blipAt = 0
     self.cps = self.cpsDefault or DEFAULT_CPS
     self.pause = 0
     self.fired = {}
+    -- inline-command indices in order, so the typewriter can stop exactly on the next one
+    self._cmdIdx, self._cmdPtr = {}, 1
+    for idx in pairs(self.cmds) do self._cmdIdx[#self._cmdIdx + 1] = idx end
+    table.sort(self._cmdIdx)
     self.choosing = false
     self.choiceIdx = 1
 end
@@ -263,16 +302,31 @@ function Dialogue:update(dt)
             end
             self.revealed = self.total
             self.pause = 0
+            self._blipAt = self.total
+            self._cmdPtr = #self._cmdIdx + 1
         else
-            self.revealed = math.min(self.total, self.revealed + self.cps * dt)
+            local target = self.revealed + self.cps * dt
+            -- Never step past a pending inline command in one frame: a {pause:} has to take
+            -- effect exactly where it sits, not after the next characters have already shown
+            -- (a long frame would otherwise overshoot it).
+            local nextCmd = self._cmdIdx[self._cmdPtr]
+            if nextCmd ~= nil and target > nextCmd then target = nextCmd end
+            self.revealed = math.min(self.total, target)
+            -- typing blip: one call per blipEvery glyphs actually revealed
+            if self.onBlip ~= nil and self.revealed >= self._blipAt + self.blipEvery then
+                self._blipAt = self.revealed
+                self.onBlip()
+            end
         end
-        -- fire commands for newly-revealed glyphs
+        -- fire commands for glyphs revealed so far
         local upto = floor(self.revealed)
-        for idx = 0, upto do
-            if self.cmds[idx] and not self.fired[idx] then
+        while self._cmdPtr <= #self._cmdIdx and self._cmdIdx[self._cmdPtr] <= upto do
+            local idx = self._cmdIdx[self._cmdPtr]
+            if not self.fired[idx] then
                 self.fired[idx] = true
                 for _, cmd in ipairs(self.cmds[idx]) do self:runCmd(cmd) end
             end
+            self._cmdPtr = self._cmdPtr + 1
         end
     else
         -- fully revealed: either offer choices, or wait for advance
@@ -291,7 +345,9 @@ function Dialogue:runCmd(cmd)
     local name, args = cmd.name, cmd.args or ""
     if name == "shake" then
         local amp, dur = args:match("([%d%.]+),?([%d%.]*)")
-        GLOBALCAMERA:Shake(tonumber(amp) or 12, tonumber(dur) or 0.3)
+        amp, dur = tonumber(amp) or 12, tonumber(dur) or 0.3
+        -- 2D screens shake themselves (GLOBALCAMERA only moves the 3D view)
+        if self.onShake then self.onShake(amp, dur) else GLOBALCAMERA:Shake(amp, dur) end
     elseif name == "pause" then
         self.pause = tonumber(args) or 0.4
     elseif name == "speed" then
@@ -462,26 +518,41 @@ function Dialogue:draw()
                 fb.row:SetColor(rc[1] / 255, rc[2] / 255, rc[3] / 255)
                 fb.row:SetOpacity((rc[4] or 255) / 255)
                 fb.row:Draw(self.textX, ry)
-                local label = (sel and "\u{25B8} " or "   ") .. ch[i].label
+                -- the marker is drawn separately so the label's x and wrap width never change
+                -- between selected and unselected (otherwise the text visibly squishes)
+                local cc = self:color(t.choiceText[1], t.choiceText[2], t.choiceText[3])
                 if self.gfont then
-                    self.gfont:Draw(label, self.textX + 22, ry + fb.rh / 2,
-                        self:color(t.choiceText[1], t.choiceText[2], t.choiceText[3]), self:color(0, 0, 0, 0), 1, 1, fb.rw - 44, "left")
+                    if sel then
+                        self.gfont:Draw("\u{25B8}", self.textX + 22, ry + fb.rh / 2, cc, self:color(0, 0, 0, 0), 1, 1, 0, "left")
+                    end
+                    self.gfont:Draw(ch[i].label, self.textX + 54, ry + fb.rh / 2,
+                        cc, self:color(0, 0, 0, 0), 1, 1, fb.rw - 76, "left")
                 elseif self.fonts.text then
-                    self.fonts.text:GetText(label, false, fb.rw - 44,
-                        self:color(t.choiceText[1], t.choiceText[2], t.choiceText[3]), self:color(0, 0, 0, 0))
-                        :Draw(self.textX + 22, ry + 6)
+                    if sel then
+                        self.fonts.text:GetText("\u{25B8}", false, 40, cc, self:color(0, 0, 0, 0)):Draw(self.textX + 22, ry + 6)
+                    end
+                    self.fonts.text:GetText(ch[i].label, false, fb.rw - 76, cc, self:color(0, 0, 0, 0))
+                        :Draw(self.textX + 54, ry + 6)
                 end
             end
         else
+            local cy = self.choiceY or (self.textY + 70)
             for i = 1, #ch do
                 local sel = (i == self.choiceIdx)
                 local r, g, b = sel and 255 or 200, sel and 235 or 200, sel and 140 or 205
-                local pre = sel and "> " or "  "
+                local y = cy + (i - 1) * 42
+                -- marker drawn apart from the label so selecting never shifts/resizes the text
                 if self.gfont then
-                    self.gfont:Draw(pre .. ch[i].label, self.textX + 30, self.textY + 70 + (i - 1) * 42, self:color(r, g, b), nil, 1, 1, 0, "topleft")
+                    if sel then
+                        self.gfont:Draw("\u{25B8}", self.textX + 30, y, self:color(r, g, b), self:color(0, 0, 0, 255), 1, 1, 0, "topleft")
+                    end
+                    self.gfont:Draw(ch[i].label, self.textX + 62, y, self:color(r, g, b), self:color(0, 0, 0, 255), 1, 1, 0, "topleft")
                 else
-                    self.fonts.text:GetText(pre .. ch[i].label, false, 800, COLOR:CreateColorFromRGBA(r, g, b, 255), COLOR:CreateColorFromRGBA(0, 0, 0, 255))
-                        :Draw(self.textX + 30, self.textY + 70 + (i - 1) * 42)
+                    if sel then
+                        self.fonts.text:GetText("\u{25B8}", false, 40, COLOR:CreateColorFromRGBA(r, g, b, 255), COLOR:CreateColorFromRGBA(0, 0, 0, 255)):Draw(self.textX + 30, y)
+                    end
+                    self.fonts.text:GetText(ch[i].label, false, 800, COLOR:CreateColorFromRGBA(r, g, b, 255), COLOR:CreateColorFromRGBA(0, 0, 0, 255))
+                        :Draw(self.textX + 62, y)
                 end
             end
         end

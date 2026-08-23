@@ -11,6 +11,10 @@
         "PAGODA_ACCEPT":     "接受挑战吗？",
         "PAGODA_YES":        "是",
         "PAGODA_NO":         "否",
+        "PAGODA_NEXT":          "下一层…",
+        "PAGODA_START":         "开始",
+        "PAGODA_LEAVE":         "离开",
+        "PAGODA_LEAVE_CONFIRM":  "确定吗？离开将失去当前进度",
         "PAGODA_EXIT":      "退出",
 
         "SETTINGS_UI_KEYS": "输入设置",

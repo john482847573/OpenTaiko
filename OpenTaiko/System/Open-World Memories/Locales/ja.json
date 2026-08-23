@@ -11,6 +11,10 @@
         "PAGODA_ACCEPT":     "挑戦を受けますか？",
         "PAGODA_YES":        "はい",
         "PAGODA_NO":         "いいえ",
+        "PAGODA_NEXT":          "次へ…",
+        "PAGODA_START":         "はじめる",
+        "PAGODA_LEAVE":         "戻る",
+        "PAGODA_LEAVE_CONFIRM":  "本当に？戻ると進行状況は失われます",
         "PAGODA_EXIT":      "退出",
 
         "SETTINGS_UI_KEYS": "入力設定",
