@@ -174,6 +174,7 @@ jobs:
               git commit -m "Update changelog for versions $env:versionFirst to $env:versionLast"
           }
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+          
 
       - name: Build for Windows x64
         shell: cmd
@@ -187,6 +188,20 @@ jobs:
           7z a ../../../../../OpenTaiko.Win.x64.zip publish/ -xr!publish/Songs/ -xr!publish/FFmpeg/ -xr!publish/System/ -xr!publish/Libs/
           7z u ../../../../../OpenTaiko.Win.x64.zip "publish/Libs/win-x64/*" "publish/FFmpeg/win-x64/*" "publish/Songs/L2 Custom Charts/*" "publish/Songs/L3 Downloaded Songs/*" "publish/Songs/S1 Dan-i Dojo/box.def" "publish/Songs/S2 Taiko Towers/box.def" "publish/Songs/X1 Favorite/*" "publish/Songs/X2 Recent/*" "publish/Songs/X3 Search By Difficulty/*" "publish/Songs/X4 Search By Text/*"
           cd ..\..\..\..\..\
+
+      - name: Build for MacOS x64
+        shell: cmd
+        run: |
+          build-osx-x64.bat
+
+      - name: Create Archive (MacOS x64)
+        shell: cmd
+        run: |
+          cd OpenTaiko\bin\Release\net8.0\osx-x64\
+          7z a ../../../../../OpenTaiko.Macos.x64.zip publish/ -xr!publish/Songs/ -xr!publish/FFmpeg/ -xr!publish/System/ -xr!publish/Libs/
+          7z u ../../../../../OpenTaiko.Macos.x64.zip "publish/Libs/macos-x64/*" "publish/FFmpeg/macos-x64/*" "publish/Songs/L2 Custom Charts/*" "publish/Songs/L3 Downloaded Songs/*" "publish/Songs/S1 Dan-i Dojo/box.def" "publish/Songs/S2 Taiko Towers/box.def" "publish/Songs/X1 Favorite/*" "publish/Songs/X2 Recent/*" "publish/Songs/X3 Search By Difficulty/*" "publish/Songs/X4 Search By Text/*"
+          cd ..\..\..\..\..\
+
 
       - name: Build for Linux x64
         shell: cmd
@@ -231,7 +246,7 @@ jobs:
       - name: Upload All Builds for the Latest Release
         uses: xresloader/upload-to-github-release@v1.6.0
         with:
-          file: "OpenTaiko.Win.x64.zip;OpenTaiko.Linux.x64.zip;special/linux_installer_standalone.bash"
+          file: "OpenTaiko.Win.x64.zip;OpenTaiko.Linux.x64.zip;OpenTaiko.Macos.x64.zip;special/linux_installer_standalone.bash"
           overwrite: true
           tag_name: ${{ env.versionLast }}
           draft: false
