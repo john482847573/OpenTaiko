@@ -555,7 +555,7 @@ public abstract class Game : IDisposable {
 				Name = "InputThread",
 				IsBackground = true,
 			};
-			#this.thInput.Start();
+			// this.thInput.Start();
 			Trace.TraceInformation("Input thread started.");
 		} catch (Exception ex) {
 			Trace.TraceWarning(ex.ToString());
