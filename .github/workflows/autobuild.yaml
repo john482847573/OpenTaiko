@@ -199,7 +199,7 @@ jobs:
         run: |
           cd OpenTaiko\bin\Release\net8.0\osx-x64\
           7z a ../../../../../OpenTaiko.Macos.x64.zip publish/ -xr!publish/Songs/ -xr!publish/FFmpeg/ -xr!publish/System/ -xr!publish/Libs/
-          7z u ../../../../../OpenTaiko.Macos.x64.zip "publish/Libs/macos-x64/*" "publish/FFmpeg/macos-x64/*" "publish/Songs/L2 Custom Charts/*" "publish/Songs/L3 Downloaded Songs/*" "publish/Songs/S1 Dan-i Dojo/box.def" "publish/Songs/S2 Taiko Towers/box.def" "publish/Songs/X1 Favorite/*" "publish/Songs/X2 Recent/*" "publish/Songs/X3 Search By Difficulty/*" "publish/Songs/X4 Search By Text/*"
+          7z u ../../../../../OpenTaiko.Macos.x64.zip "publish/Libs/osx-x64/*" "publish/FFmpeg/osx-x64/*" "publish/Songs/L2 Custom Charts/*" "publish/Songs/L3 Downloaded Songs/*" "publish/Songs/S1 Dan-i Dojo/box.def" "publish/Songs/S2 Taiko Towers/box.def" "publish/Songs/X1 Favorite/*" "publish/Songs/X2 Recent/*" "publish/Songs/X3 Search By Difficulty/*" "publish/Songs/X4 Search By Text/*"
           cd ..\..\..\..\..\
 
 
