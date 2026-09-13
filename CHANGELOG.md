@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0.111] - 2026-09-12 (Beta)
+
+- [Fix] Graphics Device and inputs not being properly initialized when used with OpenTaiko Hub 0.2 or newer
+
+## [0.6.0.110] - 2026-09-05 (Beta)
+
+- [Chore] Add EXFA unlocks to SongUnlockables.db3
+
 ## [0.6.0.109] - 2026-08-15 (Beta)
 
 - [Fix] Song list enumeration not started at launch every next time since 0.6.0.108, because StartUp stage had always been mistreating system sound done loading as song list done enumerating long before exposed as a bug in 0.6.0.108

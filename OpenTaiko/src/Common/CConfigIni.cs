@@ -895,7 +895,13 @@ internal class CConfigIni : INotifyPropertyChanged {
 		this.bIsEnabledSystemMenu = true; // #28200 2012.5.1 yyagi System Menuの利用可否切替(使用可)
 		this.strSystemSkinSubfolderFullName = ""; // #28195 2012.5.2 yyagi 使用中のSkinサブフォルダ名
 		this.bTight = false; // #29500 2012.9.11 kairera0467 TIGHTモード
-		nGraphicsDeviceType = 0;
+
+		// OSごとの推奨グラフィックデバイス (0:OpenGL 1:D3D11 2:Vulkan 3:Metal)
+		// Recommended graphics device per OS (0:OpenGL 1:D3D11 2:Vulkan 3:Metal).
+		// While we aren't able to support MacOS, this check is included just in case this changes.
+		nGraphicsDeviceType = OperatingSystem.IsMacOS() ? 3
+			: OperatingSystem.IsLinux() ? 2
+			: 0;
 
 		#region [ WASAPI/ASIO ]
 
@@ -1873,13 +1879,43 @@ internal class CConfigIni : INotifyPropertyChanged {
 		}
 
 		string str;
-		this.ClearAllKeyAssignments();
+		// キーアサインは項目単位で上書きする (ReadAndSetKey 参照)。
+		// Key assignments are overwritten entry by entry (see ReadAndSetKey), so entries missing from
+		// the file keep the defaults set by the constructor. This matters for partially written
+		// Config.ini files (e.g. the one OpenTaiko Hub generates with only the songs path in it),
+		// which would otherwise leave the game with no keybinds at all.
 		using (StreamReader reader =
 			   new StreamReader(this.ConfigIniFileName, Encoding.GetEncoding(OpenTaiko.sEncType))) {
 			str = reader.ReadToEnd();
 		}
 
 		this.LoadFromString(str);
+
+		// キーアサインが一つも無い Config.ini は操作不能なので、既定値に戻す。
+		// A Config.ini in which every single key assignment is empty leaves the game with no way to
+		// play or even navigate the menus, so it is never something a player set up on purpose.
+		// 0.6.0.110 and earlier wrote exactly that out after being started with a partially written
+		// Config.ini (e.g. the one OpenTaiko Hub generates), so recover instead of honouring it.
+		if (!this.HasAnyKeyAssignment()) {
+			Trace.TraceWarning(
+				"Config.ini does not assign a single input; restoring the default key assignments.");
+			this.SetDefaultKeyAssignments();
+		}
+	}
+
+	private bool HasAnyKeyAssignment() {
+		for (int i = 0; i <= (int)EKeyConfigPart.System; i++) {
+			for (int j = 0; j < (int)EKeyConfigPad.Max; j++) {
+				CKeyAssign.STKEYASSIGN[] assign = this.KeyAssign[i][j];
+				for (int k = 0; k < assign.Length; k++) {
+					if (assign[k].InputDevice != InputDeviceType.Unknown) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private void LoadFromString(string strAllSettings) {
@@ -2839,10 +2875,14 @@ internal class CConfigIni : INotifyPropertyChanged {
 		for (int i = 0; i <= (int)EKeyConfigPart.System; i++) {
 			for (int j = 0; j < (int)EKeyConfigPad.Max; j++) {
 				this.KeyAssign[i][j] = new CKeyAssign.STKEYASSIGN[16];
-				for (int k = 0; k < 16; k++) {
-					this.KeyAssign[i][j][k] = new CKeyAssign.STKEYASSIGN(InputDeviceType.Unknown, 0, 0);
-				}
+				ClearKeyAssignment(this.KeyAssign[i][j]);
 			}
+		}
+	}
+
+	private static void ClearKeyAssignment(CKeyAssign.STKEYASSIGN[] assign) {
+		for (int i = 0; i < assign.Length; i++) {
+			assign[i] = new CKeyAssign.STKEYASSIGN(InputDeviceType.Unknown, 0, 0);
 		}
 	}
 
@@ -2887,6 +2927,11 @@ internal class CConfigIni : INotifyPropertyChanged {
 	}
 
 	private void ReadAndSetKey(string keyDescription, CKeyAssign.STKEYASSIGN[] assign) {
+		// この項目がファイルに書かれている以上、既定値ではなくファイルの内容で完全に置き換える。
+		// The entry is present in the file, so it fully replaces the default (including an empty
+		// value, which means the player deliberately unassigned it).
+		ClearKeyAssignment(assign);
+
 		string[] strArray = keyDescription.Split(new char[] { ',' });
 		for (int i = 0; (i < strArray.Length) && (i < 0x10); i++) {
 			InputDeviceType eInputDevice;
